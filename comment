@@ -1,0 +1,57 @@
+async function getData() {
+    var json
+    await fetch("https://docs.google.com/spreadsheets/d/14FskVgqWIzyzsFDgeag2dDUAsDCWm8tW6EPOM8FdruA/gviz/tq?tqx=out:json&tq&gid=1365230881")
+    .then(response => response.text())
+    .then(data => json = JSON.parse(data.slice(47, -2)))
+    // JSON data
+    // {}["table"]["rows"][X]['c'] - ez egy cucc
+    // [c][1]['v'] = "Forgalmi Engedély Hiánya" stb
+    // c2v - pénzbirság orientált bünti (pl 400.000 Ft)
+    // c3v - börtönidő (pénzbirság orientált) (pl 30 nap)
+    // c4v - pénzbirság (börtönidő orientált)
+    // c5v - börtönidő (börtönidő orientált)
+    // itt [c][6]['v'] = FEH, JNV stb
+    // c7v leirás
+    var json2 = {}
+    for (key of json["table"]["rows"]) {
+        if (!key["c"]) continue
+        if (!key["c"][0] || !key["c"][0]["v"] || !key["c"][0]["v"].includes("§")) continue
+        if (!key["c"][2] || !key["c"][2]["v"] || !key["c"][2]["v"].includes("Ft")) {
+            json2[`§${key["c"][0]["v"]}`] = key["c"][1]["v"]
+            continue
+        }
+        json2[Object.keys(json2).length] = {
+            "§": key["c"][0]["v"],
+            "név": key["c"][1]["v"],
+            "bünti1": key["c"][2]["v"],
+            "börtönidő1": key["c"][3]["v"],
+            "bünti2": key["c"][4]["v"],
+            "börtönidő2": key["c"][5]["v"],
+            "rövid": key["c"][6]["v"],
+            "leírás": key["c"][7]["v"]
+        }
+    }
+    fs.writeFileSync("data.json", JSON.stringify(json2))
+    console.log("kész")
+}
+
+function jsonToStr(json) {
+    var str = "<table><tr><th></th><th>Megnevezés</th><th>Rövidítés</th><th>Megjegyzés</th></tr>"
+    for (val of Object.values(json)) {
+        if (typeof(val) == "string") {
+            //val elvileg: "Lopás"/"Testi sértés" stb
+            continue
+        }
+        var regexpmatch = RegExp(/[0-9]*\.[0-9]/gm).exec(val["§"])
+        var toaddstr = ""
+        if (regexpmatch && val["§"]!="1.1§") { //HARDCODED mert úgy is csak ez az egy ilyen van, most nincs kedvem többet írni
+            //console.log("regexmatch (elvileg 5-6 ilyen van össz): "+val["§"])
+           toaddstr = json[`§${val["§"].split(".")[0]}.§`].replace(":","").trim()+"|"
+        }
+        //console.log(`DEBUG: ${val} - ${val["§"]} - ${val["börtönidő1"]}`)
+        str += `<tr><td><input class="chkbox" borton1="${val["börtönidő1"].split(" nap")[0].replace("-","0")}" borton2="${val["börtönidő2"].split(" nap")[0].replace("-","0")}" penz1="${val["bünti1"].split("Ft")[0].replaceAll(".","").replace("-","").trim()}" penz2="${val["bünti2"].split("Ft")[0].replaceAll(".","").replace("-","").trim()}" id="${val["rövid"]}" type="checkbox"/></td><td>${toaddstr + val["név"]}</td><td>${val["rövid"]}</td><td>${val["leírás"]||"-"}</td></tr>`
+    }
+    str += "</table>"
+    fs.writeFileSync("str2.txt", str)
+    console.log("kész")
+} 
